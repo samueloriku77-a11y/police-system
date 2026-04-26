@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Live Scan with Heatmap</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+      body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+      .scanner { 
+        height: 450px; 
+        background: #ffffff; 
+        border: 3px solid #667eea; 
+        position: relative; 
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+      }
+      .scanner.scanning {
+        box-shadow: 0 0 30px rgba(102, 126, 234, 0.6), 0 8px 24px rgba(0,0,0,0.15);
+      }
+      .scan-line { 
+        position: absolute; 
+        left: 0; 
+        right: 0; 
+        height: 4px; 
+        background: linear-gradient(to bottom, rgba(102, 126, 234, 0), rgba(102, 126, 234, 1), rgba(102, 126, 234, 0)); 
+        top: 0;
+        z-index: 10;
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.8), 0 0 20px rgba(102, 126, 234, 0.5);
+        display: none;
+      }
+      .scan-line.active {
+        display: block;
+        animation: scanPulse 0.3s ease-in-out infinite;
+      }
+      @keyframes scanPulse {
+        0%, 100% {
+          box-shadow: 0 0 10px rgba(102, 126, 234, 0.8), 0 0 20px rgba(102, 126, 234, 0.5);
+        }
+        50% {
+          box-shadow: 0 0 15px rgba(102, 126, 234, 1), 0 0 30px rgba(102, 126, 234, 0.8);
+        }
+      }
+      @keyframes scanMove {
+        0% {
+          top: 0;
+        }
+        100% {
+          top: 100%;
+        }
+      }
+      .scanning .scan-line {
+        animation: scanMove 3s linear infinite, scanPulse 0.3s ease-in-out infinite;
+      }
+      .scanner-image {
+        max-width: 95%;
+        max-height: 95%;
+        object-fit: contain;
+      }
+      .heatmap-container {
+        text-align: center;
+        width: 100%;
+        overflow-x: auto;
+      }
+      .heatmap-image {
+        max-width: 100%;
+        max-height: 600px;
+        border-radius: 8px;
+        margin: 15px 0;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        display: block;
+      }
+      .upload-area {
+        border: 3px dashed #667eea;
+        border-radius: 12px;
+        padding: 40px 20px;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s;
+        background-color: #f9f9f9;
+      }
+      .upload-area:hover {
+        background-color: #e7f0ff;
+        border-color: #764ba2;
+      }
+      .upload-area.dragover {
+        background-color: #d8e0ff;
+        border-color: #764ba2;
+        border-width: 3px;
+        transform: scale(1.02);
+      }
+      .card {
+        border: none;
+        border-radius: 12px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      }
+      .card-body {
+        background: white;
+      }
+      .progress {
+        height: 28px;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        font-weight: bold;
+        color: white;
+      }
+      .status-badge {
+        display: inline-block;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        margin: 10px 0;
+      }
+      .status-authentic {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .status-uncertain {
+        background-color: #fff3cd;
+        color: #856404;
+      }
+      .status-forged {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      #scannerContent {
+        text-align: center;
+        color: #6c757d;
+        font-size: 16px;
+      }
+      .result-item {
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+      }
+      .result-item:last-child {
+        border-bottom: none;
+      }
+    </style>
+  </head>
+  <body class="bg-light">
+    <div class="container py-4">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h3 class="text-white">🔍 Live Document Scanner</h3>
+        <a href="/" class="btn btn-light">← Back to Dashboard</a>
+      </div>
+
+      <!-- Upload Section -->
+      <div class="card mb-4">
+        <div class="card-body">
+          <h5 class="card-title mb-3">📤 Upload Document to Verify</h5>
+          <div class="upload-area" id="uploadArea">
+            <p class="mb-2"><strong>Drag & drop your document here</strong></p>
+            <p class="text-muted">or click to browse</p>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+            <small class="text-muted">Supported: JPG, PNG, BMP (Max 25MB)</small>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scanner Section with Heatmap -->
+      <div class="row">
+        <div class="col-lg-8">
+          <div class="card mb-3">
+            <div class="card-body">
+              <h5 class="card-title">📊 Real-Time Scan</h5>
+              <div class="scanner mb-3" id="scanner">
+                <div class="scan-line" id="scanLine"></div>
+                <div id="scannerContent">
+                  <p class="text-muted">Upload a document to begin scanning</p>
+                </div>
+              </div>
+
+              <div class="progress mb-3" style="height:28px">
+                <div id="gauge" class="progress-bar" role="progressbar" style="width:0%">0%</div>
+              </div>
+              <p id="status" class="text-muted mb-2">Status: Ready</p>
+            </div>
+          </div>
+
+          <!-- Heatmap Section -->
+          <div id="heatmapSection" class="card" style="display: none;">
+            <div class="card-body">
+              <h5 class="card-title">🔥 Anomaly Heatmap</h5>
+              <div class="heatmap-container" id="heatmapContainer">
+                <p class="text-muted">Generating heatmap...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="col-lg-4">
+          <div id="resultsSection" class="card" style="display: none;">
+            <div class="card-body">
+              <h5 class="card-title">✅ Analysis Results</h5>
+              
+              <div id="resultStatus" class="status-badge"></div>
+              
+              <div class="result-item">
+                <small class="text-muted">Similarity Score</small>
+                <h6 id="similarity">--</h6>
+              </div>
+              
+              <div class="result-item">
+                <small class="text-muted">Confidence Level</small>
+                <h6 id="confidence">--</h6>
+              </div>
+              
+              <div class="result-item">
+                <small class="text-muted">Closest Match</small>
+                <h6 id="closest">--</h6>
+              </div>
+              
+              <div class="result-item">
+                <small class="text-muted">Classification</small>
+                <h6 id="classification">--</h6>
+              </div>
+
+              <div id="similaritiesSection" style="margin-top: 15px;">
+                <small class="text-muted">All Reference Comparisons:</small>
+                <div id="allSimilarities" style="max-height: 200px; overflow-y: auto;">
+                  <p class="text-muted" style="font-size: 12px;">Loading...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const uploadArea = document.getElementById('uploadArea');
+      const fileInput = document.getElementById('fileInput');
+      const scanner = document.getElementById('scanner');
+      const scanLine = document.getElementById('scanLine');
+      const scannerContent = document.getElementById('scannerContent');
+      let progress = 0;
+      let isScanning = false;
+      let currentData = null;
+
+      // Upload area click handler
+      uploadArea.addEventListener('click', () => fileInput.click());
+
+      // File input change handler
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) handleFileUpload(file);
+      });
+
+      // Drag and drop handlers
+      uploadArea.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        uploadArea.classList.add('dragover');
+      });
+
+      uploadArea.addEventListener('dragleave', () => {
+        uploadArea.classList.remove('dragover');
+      });
+
+      uploadArea.addEventListener('drop', (e) => {
+        e.preventDefault();
+        uploadArea.classList.remove('dragover');
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          handleFileUpload(file);
+        }
+      });
+
+      function handleFileUpload(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          // Display image in scanner
+          scannerContent.innerHTML = `<img src="${e.target.result}" class="scanner-image" alt="Uploaded document">`;
+          
+          // Start scanning animation
+          scanner.classList.add('scanning');
+          scanLine.classList.add('active');
+          
+          isScanning = true;
+          progress = 0;
+          document.getElementById('resultsSection').style.display = 'none';
+          document.getElementById('heatmapSection').style.display = 'none';
+          poll();
+          
+          // Send to backend
+          const formData = new FormData();
+          formData.append('file', file);
+          
+          fetch('/detect', {
+            method: 'POST',
+            body: formData
+          })
+          .then(response => response.json())
+          .then(data => {
+            console.log('Response from /detect:', data);
+            if (data.error) {
+              document.getElementById('status').textContent = 'Status: ❌ Error - ' + data.error;
+              isScanning = false;
+              scanner.classList.remove('scanning');
+              scanLine.classList.remove('active');
+            } else {
+              currentData = data;
+              displayResults(data);
+              // Generate heatmap/annotations after analysis
+              if (data.forgery_results && data.forgery_results.annotated_b64 && data.forgery_results.regions && data.forgery_results.regions.length > 0) {
+                console.log('Annotated region data found, displaying...');
+                displayHeatmap(data.forgery_results.annotated_b64, "Suspicious Regions Identified");
+              } else if (data.forgery_results && data.forgery_results.heatmap_b64) {
+                displayHeatmap(data.forgery_results.heatmap_b64, "Anomaly Heatmap");
+              } else {
+                console.warn('No visual data in response');
+              }
+              isScanning = false;
+              scanner.classList.remove('scanning');
+              scanLine.classList.remove('active');
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            document.getElementById('status').textContent = 'Status: ❌ Error uploading file';
+            isScanning = false;
+            scanner.classList.remove('scanning');
+            scanLine.classList.remove('active');
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function displayResults(data) {
+        const statusMap = {
+          'AUTHENTIC': { class: 'status-authentic', text: '✅ AUTHENTIC' },
+          'UNCERTAIN': { class: 'status-uncertain', text: '⚠️ UNCERTAIN' },
+          'FORGED': { class: 'status-forged', text: '❌ FORGED' }
+        };
+        
+        const statusInfo = statusMap[data.status] || { class: 'status-uncertain', text: data.status };
+        
+        document.getElementById('resultStatus').className = 'status-badge ' + statusInfo.class;
+        document.getElementById('resultStatus').textContent = statusInfo.text;
+        
+        document.getElementById('similarity').textContent = (data.similarity * 100).toFixed(2) + '%';
+        document.getElementById('confidence').textContent = (data.confidence * 100).toFixed(2) + '%';
+        document.getElementById('closest').textContent = data.closest_match || 'N/A';
+        document.getElementById('classification').textContent = data.status;
+        
+        // Display all similarities
+        if (data.all_similarities) {
+          let similaritiesHTML = '<div style="font-size: 12px;">';
+          for (const [name, score] of Object.entries(data.all_similarities)) {
+            similaritiesHTML += `<div class="result-item" style="padding: 5px 0;">
+              <small><strong>${name}:</strong> ${(score * 100).toFixed(2)}%</small>
+            </div>`;
+          }
+          similaritiesHTML += '</div>';
+          document.getElementById('allSimilarities').innerHTML = similaritiesHTML;
+        }
+        
+        document.getElementById('resultsSection').style.display = 'block';
+      }
+
+      function displayHeatmap(heatmapB64, title="Analysis Results") {
+        console.log('displayHeatmap called with data:', heatmapB64 ? 'present' : 'missing');
+        if (!heatmapB64) {
+          console.warn('No heatmap data provided');
+          return;
+        }
+        const heatmapHTML = `<h5 class="text-white mb-3" style="font-weight: bold;">${title}</h5><img src="data:image/png;base64,${heatmapB64}" class="heatmap-image" alt="Visual Results" style="width: 100%;">
+          <p class="text-muted" style="font-size: 13px; margin-top: 10px;">
+            🔴 Visual indicators show the regions identified by the model as potentially altered or suspicious (if any).
+          </p>`;
+        const container = document.getElementById('heatmapContainer');
+        console.log('Heatmap container:', container);
+        if (container) {
+          container.innerHTML = heatmapHTML;
+        }
+        const section = document.getElementById('heatmapSection');
+        if (section) {
+          section.style.display = 'block';
+          console.log('✅ Heatmap section made visible');
+          // Scroll into view
+          section.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+
+      function poll() {
+        if (!isScanning) return;
+        fetch('/scan/progress?progress=' + progress)
+          .then(r => r.json())
+          .then(d => {
+            progress = Math.min(100, progress + 8);
+            const g = document.getElementById('gauge');
+            g.style.width = d.progress + '%';
+            g.scanner.classList.remove('scanning');
+              scanLine.classList.remove('active');
+              textContent = Math.round(d.similarity * 100) + '%';
+            document.getElementById('status').textContent = '📍 Status: ' + d.status;
+            if (progress < 100) {
+              setTimeout(poll, 500);
+            } else {
+              isScanning = false;
+              document.getElementById('status').textContent = '✅ Status: Scan complete';
+            }
+          })
+          .catch(err => {
+            console.error('Poll error:', err);
+          });
+      }
+    </script>
+  </body>
+</html>
+

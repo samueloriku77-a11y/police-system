@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Document Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Monaco', 'Courier New', monospace;
+            background: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+            background-attachment: fixed;
+            color: #c9d1d9;
+            line-height: 1.6;
+        }
+
+        .header {
+            background: rgba(22, 27, 34, 0.6);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .back-button {
+            background: rgba(88, 166, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            color: #58a6ff;
+            padding: 10px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 12px;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.3s;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .back-button:hover {
+            background: rgba(88, 166, 255, 0.3);
+            border-color: rgba(88, 166, 255, 0.5);
+            transform: translateX(-2px);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            margin: 0;
+            color: #58a6ff;
+        }
+
+        .user-info {
+            text-align: right;
+        }
+
+        .user-info p {
+            margin: 5px 0;
+            font-size: 13px;
+        }
+
+        .nav-tabs {
+            background: rgba(22, 27, 34, 0.4);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+            display: flex;
+            padding: 0 20px;
+        }
+
+        .nav-tab {
+            padding: 15px 20px;
+            border: none;
+            background: none;
+            color: #8b949e;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s;
+        }
+
+        .nav-tab:hover {
+            color: #c9d1d9;
+        }
+
+        .nav-tab.active {
+            color: #58a6ff;
+            border-bottom-color: #58a6ff;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 200px);
+        }
+
+        .panel {
+            background: rgba(22, 27, 34, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px;
+            overflow-y: auto;
+            display: none;
+            box-shadow: 0 8px 32px 0 rgba(88, 166, 255, 0.1);
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .panel h2 {
+            color: #58a6ff;
+            margin: 0 0 20px 0;
+            font-size: 16px;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: #8b949e;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+
+        input[type="file"],
+        input[type="text"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(13, 17, 23, 0.5);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+            color: #c9d1d9;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+            transition: all 0.3s;
+        }
+
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: rgba(88, 166, 255, 0.8);
+            background: rgba(13, 17, 23, 0.8);
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.2);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            font-size: 12px;
+            color: #c9d1d9;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+
+        input[type="checkbox"] {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        button {
+            background: rgba(35, 134, 54, 0.7);
+            backdrop-filter: blur(10px);
+            color: white;
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-size: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: rgba(35, 134, 54, 0.9);
+            border-color: rgba(63, 185, 80, 0.6);
+            box-shadow: 0 4px 16px rgba(63, 185, 80, 0.2);
+        }
+
+        button.danger {
+            background: #da3633;
+        }
+
+        button.danger:hover {
+            background: #f85149;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+        }
+
+        .table th {
+            background: rgba(13, 17, 23, 0.6);
+            backdrop-filter: blur(10px);
+            color: #8b949e;
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.3);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .table td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.2);
+        }
+
+        .table tr:hover {
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        .status-forged {
+            background: rgba(248, 81, 73, 0.2);
+            color: #f85149;
+        }
+
+        .status-authentic {
+            background: rgba(63, 185, 80, 0.2);
+            color: #3fb950;
+        }
+
+        .status-suspicious {
+            background: rgba(210, 153, 34, 0.2);
+            color: #d29922;
+        }
+
+        .similarity-score {
+            font-weight: 600;
+            color: #58a6ff;
+        }
+
+        .doc-card {
+            background: rgba(13, 17, 23, 0.5);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 10px;
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            transition: all 0.3s;
+        }
+
+        .doc-card:hover {
+            background: rgba(13, 17, 23, 0.7);
+            border-color: rgba(88, 166, 255, 0.4);
+            box-shadow: 0 4px 16px rgba(88, 166, 255, 0.1);
+        }
+
+        .doc-info {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .doc-name {
+            color: #58a6ff;
+            font-size: 13px;
+            font-weight: 600;
+            word-break: break-word;
+        }
+
+        .doc-meta {
+            font-size: 11px;
+            color: #8b949e;
+        }
+
+        .doc-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .doc-actions button {
+            padding: 5px 10px;
+            font-size: 11px;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 15px;
+            font-size: 12px;
+            backdrop-filter: blur(10px);
+        }
+
+        .alert-danger {
+            background: rgba(248, 81, 73, 0.15);
+            border: 1px solid rgba(248, 81, 73, 0.5);
+            color: #f85149;
+        }
+
+        .alert-success {
+            background: rgba(63, 185, 80, 0.15);
+            border: 1px solid rgba(63, 185, 80, 0.5);
+            color: #3fb950;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: rgba(13, 17, 23, 0.6);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(88, 166, 255, 0.2);
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+
+        .stat-box:hover {
+            border-color: rgba(88, 166, 255, 0.4);
+            background: rgba(13, 17, 23, 0.8);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            color: #58a6ff;
+            font-weight: 600;
+            margin: 5px 0;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #8b949e;
+            text-transform: uppercase;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #8b949e;
+        }
+
+        .empty-state p {
+            margin: 10px 0;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #484f58;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-left">
+            <a href="/" class="back-button">← Back</a>
+            <h1>📊 ANALYSIS DASHBOARD</h1>
+        </div>
+        <div class="user-info">
+            <p><strong>{{ username }}</strong></p>
+            <p style="color: #8b949e;">Admin Panel</p>
+        </div>
+    </div>
+
+    <div class="nav-tabs">
+        <button class="nav-tab active" onclick="switchTab('analysis')">Analysis Results</button>
+        <button class="nav-tab" onclick="switchTab('references')">Reference Docs</button>
+        <button class="nav-tab" onclick="switchTab('uploads')">Upload Documents</button>
+        <button class="nav-tab" onclick="switchTab('edit-tracking')">Edit Tracking</button>
+    </div>
+
+    <!-- ANALYSIS RESULTS PANEL -->
+    <div id="analysis" class="panel active">
+        <h2>Analysis Results</h2>
+        
+        <div class="stats-grid">
+            <div class="stat-box">
+                <div class="stat-label">Total Analyzed</div>
+                <div class="stat-value">{{ history|length }}</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-label">Flagged</div>
+                <div class="stat-value">{{ flagged|length }}</div>
+            </div>
+        </div>
+
+        {% if flagged %}
+            <h3 style="color: #f85149; margin: 20px 0 15px 0; font-size: 13px;">⚠️ FLAGGED DOCUMENTS</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Status</th>
+                        <th>Similarity</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in flagged %}
+                    <tr>
+                        <td style="max-width: 200px; word-break: break-word;">{{ result.filename }}</td>
+                        <td><span class="status-badge status-forged">{{ result.status }}</span></td>
+                        <td><span class="similarity-score">{{ "%.2f"|format(result.similarity * 100) }}%</span></td>
+                        <td>
+                            <button class="danger" style="padding: 4px 8px; font-size: 11px;" onclick="unflagCase({{ result.id }})">Unflag</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% endif %}
+
+        {% if history %}
+            <h3 style="color: #58a6ff; margin: 20px 0 15px 0; font-size: 13px;">📋 ALL ANALYSES</h3>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th>Similarity</th>
+                        <th>Reference</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for result in history|reverse %}
+                    <tr>
+                        <td style="max-width: 150px; word-break: break-word;">{{ result.filename }}</td>
+                        <td style="font-size: 11px; color: #58a6ff;">{{ result.document_type or 'Unknown' }}</td>
+                        <td>
+                            {% if result.status == 'FORGED' %}
+                                <span class="status-badge status-forged">FORGED</span>
+                            {% elif result.status == 'AUTHENTIC' %}
+                                <span class="status-badge status-authentic">AUTHENTIC</span>
+                            {% else %}
+                                <span class="status-badge status-suspicious">{{ result.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="similarity-score">{{ "%.2f"|format(result.similarity * 100) }}%</span></td>
+                        <td style="font-size: 11px; color: #8b949e;">{{ result.matched_reference.name[:20] if result.matched_reference else 'None' }}</td>
+                        <td style="font-size: 11px; color: #8b949e;">{{ result.timestamp.strftime('%Y-%m-%d %H:%M') }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        {% else %}
+            <div class="empty-state">
+                <p>No analysis results available</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- REFERENCE DOCUMENTS PANEL -->
+    <div id="references" class="panel">
+        <h2>Reference Documents</h2>
+        <p style="font-size: 11px; color: #8b949e; margin-bottom: 15px;">Baseline documents for comparison and verification</p>
+
+        {% if references %}
+            {% for ref in references %}
+            <div class="doc-card">
+                <div class="doc-info">
+                    <div class="doc-name">{{ ref.name }}</div>
+                    <div class="doc-meta">{{ ref.document_type or 'Document' }} | ID: {{ ref.id }} | Added: {{ ref.created_at.strftime('%Y-%m-%d') }}</div>
+                </div>
+                <div class="doc-actions">
+                    <button class="danger" onclick="deleteReference({{ ref.id }})">Delete</button>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <p>No reference documents</p>
+                <p style="font-size: 11px;">Upload originals to establish baselines</p>
+            </div>
+        {% endif %}
+    </div>
+
+    <!-- UPLOAD PANEL -->
+    <div id="uploads" class="panel">
+        <h2>Upload Reference Document</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>Document File</label>
+                <input type="file" id="fileInput" name="file" accept=".jpg,.jpeg,.png,.bmp,.pdf" required>
+            </div>
+
+            <div class="alert alert-success" id="successMsg" style="display: none;"></div>
+            <div class="alert alert-danger" id="errorMsg" style="display: none;"></div>
+
+            <button type="button" onclick="uploadReference()">Upload Reference</button>
+        </form>
+
+        <hr style="border: none; border-top: 1px solid #30363d; margin: 30px 0;">
+
+        <h2 style="margin-top: 0;">Upload Organization Document</h2>
+        <p style="font-size: 11px; color: #8b949e; margin-bottom: 15px;">Mark documents that should NOT be edited</p>
+
+        <form id="orgUploadForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>Document File</label>
+                <input type="file" id="orgFileInput" name="file" accept=".jpg,.jpeg,.png,.bmp,.pdf" required>
+            </div>
+
+            <div class="form-group">
+                <label>Description</label>
+                <textarea id="description" name="description" placeholder="Document purpose and notes..."></textarea>
+            </div>
+
+            <label class="checkbox-label">
+                <input type="checkbox" name="should_not_edit" value="true" checked>
+                Flag as protected (alert on edits)
+            </label>
+
+            <button type="button" onclick="uploadOrgReference()" style="margin-top: 15px;">Upload Protected Document</button>
+        </form>
+    </div>
+
+    <!-- EDIT TRACKING PANEL -->
+    <div id="edit-tracking" class="panel">
+        <h2>Document Edit Tracking</h2>
+        <p style="font-size: 11px; color: #8b949e; margin-bottom: 15px;">Monitor when protected documents are modified</p>
+
+        <div id="editTrackingContent">
+            <div class="empty-state">
+                <p>Loading edit history...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabName) {
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+
+            if (tabName === 'edit-tracking') {
+                loadEditTracking();
+            }
+        }
+
+        function uploadReference() {
+            const file = document.getElementById('fileInput').files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/admin/upload-original', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('successMsg').textContent = '✓ Reference uploaded successfully';
+                    document.getElementById('successMsg').style.display = 'block';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    throw new Error(data.error);
+                }
+            })
+            .catch(e => {
+                document.getElementById('errorMsg').textContent = '✗ ' + e.message;
+                document.getElementById('errorMsg').style.display = 'block';
+            });
+        }
+
+        function uploadOrgReference() {
+            const file = document.getElementById('orgFileInput').files[0];
+            const description = document.getElementById('description').value;
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('description', description);
+            formData.append('should_not_edit', 'true');
+
+            fetch('/admin/upload-org-reference', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('successMsg').textContent = '✓ Protected document uploaded';
+                    document.getElementById('successMsg').style.display = 'block';
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    throw new Error(data.error);
+                }
+            })
+            .catch(e => {
+                document.getElementById('errorMsg').textContent = '✗ ' + e.message;
+                document.getElementById('errorMsg').style.display = 'block';
+            });
+        }
+
+        function deleteReference(refId) {
+            if (confirm('Delete this reference document?')) {
+                fetch(`/admin/delete-org-reference/${refId}`, {method: 'POST'})
+                    .then(() => location.reload());
+            }
+        }
+
+        function unflagCase(caseId) {
+            fetch(`/unflag/${caseId}`, {method: 'POST'})
+                .then(() => location.reload());
+        }
+
+        function loadEditTracking() {
+            fetch('/api/edit-history')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.edits && data.edits.length > 0) {
+                        let html = '<table class="table"><thead><tr><th>Original</th><th>Edited By</th><th>Similarity</th><th>Changed</th><th>Date</th></tr></thead><tbody>';
+                        data.edits.forEach(edit => {
+                            html += `<tr>
+                                <td>${edit.original_filename}</td>
+                                <td>${edit.uploader_office || 'N/A'}</td>
+                                <td><span class="similarity-score">${(edit.similarity_score * 100).toFixed(1)}%</span></td>
+                                <td>${edit.changed_regions_count} regions</td>
+                                <td style="font-size: 11px; color: #8b949e;">${new Date(edit.timestamp).toLocaleString()}</td>
+                            </tr>`;
+                        });
+                        html += '</tbody></table>';
+                        document.getElementById('editTrackingContent').innerHTML = html;
+                    } else {
+                        document.getElementById('editTrackingContent').innerHTML = '<div class="empty-state"><p>No edit detections</p></div>';
+                    }
+                });
+        }
+    </script>
+</body>
+</html>

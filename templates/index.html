@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Dashboard | Document Forgery Detection</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        .drag-area {
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: rgba(0, 0, 0, 0.2);
+            color: #fff;
+        }
+        .drag-area.active {
+            border-color: #00c6ff;
+            background: rgba(0, 198, 255, 0.1);
+        }
+        .info-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin-top: 15px;
+            display: none;
+        }
+        .info-panel p { margin-bottom: 5px; color: #e0e0e0; }
+        .action-card {
+            border-left: 4px solid #00c6ff !important;
+        }
+        .card-glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 20px;
+            color: white;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-custom mb-4">
+        <div class="container">
+            <span class="navbar-brand">Document Forgery Detection</span>
+            <div class="navbar-nav ms-auto align-items-center">
+                <span class="nav-item navbar-text text-white me-3">👤 {{ username }}</span>
+                <a href="/history" class="nav-link">History</a>
+                <a href="/admin" class="nav-link">Admin</a>
+                {% if session.get('is_admin') %}
+                <a href="/tracker" class="nav-link text-warning fw-bold">Tracker System</a>
+                {% endif %}
+                <a href="/logout" class="nav-link text-danger ms-2">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container pb-5">
+        <div class="row">
+            <!-- Left Column: Upload & File Info -->
+            <div class="col-lg-5 mb-4">
+                <div class="card-glass h-100">
+                    <h4 class="mb-4">📤 Upload Section</h4>
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="drag-area mb-3" id="dragArea">
+                            <h5 class="mb-2">Drag & Drop Document Here</h5>
+                            <p class="text-white-50 mb-3">- OR -</p>
+                            <button type="button" class="btn btn-outline-light btn-sm" id="browseBtn">Browse Files</button>
+                            <input type="file" id="fileInput" name="file" accept="image/*" hidden required>
+                        </div>
+                    </form>
+                    
+                    <!-- File Information Display -->
+                    <div class="info-panel" id="fileInfoPanel">
+                        <h6 class="text-info mb-2 fw-bold">📄 File Information Display</h6>
+                        <p><strong>Filename:</strong> <span id="infoName" class="text-white">--</span></p>
+                        <p><strong>Format:</strong> <span id="infoFormat" class="text-white">--</span></p>
+                        <p><strong>Upload Date:</strong> <span id="infoDate" class="text-white">--</span></p>
+                        <p><strong>Size:</strong> <span id="infoSize" class="text-white">--</span></p>
+                        
+                        <hr class="bg-secondary">
+                        <button type="button" class="btn btn-success w-100" id="analyzeBtn">Scan / Analyze Document</button>
+                    </div>
+
+                    <!-- Scanning Spinner / Status -->
+                    <div id="scanStatus" class="mt-4 text-center" style="display: none;">
+                        <div class="spinner-border text-info mb-2" role="status"></div>
+                        <h6 class="text-info">Analyzing image layer metrics...</h6>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Analysis History & Actions -->
+            <div class="col-lg-7">
+                <!-- Quick Actions -->
+                <div class="card-glass mb-4 action-card">
+                    <h5 class="mb-3">⚡ Quick Actions</h5>
+                    <div class="d-flex gap-2 flex-wrap">
+                        <a href="/history" class="btn btn-secondary btn-sm">View Detailed Reports</a>
+                        <a href="/admin" class="btn btn-secondary btn-sm">Manage Reference Database</a>
+                        {% if session.get('is_admin') %}
+                        <a href="/tracker" class="btn btn-warning btn-sm text-dark fw-bold">Open Police/Tracker Dashboard</a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Recent Analysis History -->
+                <div class="card-glass">
+                    <h5 class="mb-3">🕒 Recent Analysis History (Top 10)</h5>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-hover table-sm text-white">
+                            <thead>
+                                <tr>
+                                    <th>Filename</th>
+                                    <th>Status</th>
+                                    <th>Score</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% if recent_history %}
+                                    {% for record in recent_history %}
+                                    <tr>
+                                        <td>{{ record.filename[:20] }}...</td>
+                                        <td>
+                                            {% if record.status == 'AUTHENTIC' %}
+                                                <span class="badge bg-success">Valid</span>
+                                            {% elif record.status == 'FORGED' or record.status == 'EDITED' %}
+                                                <span class="badge bg-danger">Forged</span>
+                                            {% else %}
+                                                <span class="badge bg-warning">Warning</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ '%.1f'|format(record.similarity * 100) }}%</td>
+                                        <td>{{ record.timestamp.strftime('%H:%M %p - %b %d') }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-white-50">No recent analysis history available on this account.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Local Results Overlay (Appears after dynamic scanning) -->
+        <div id="resultsWrapper" class="row mt-4" style="display: none;">
+            <div class="col-12">
+                <div class="card-glass border-info" style="border-width: 2px;">
+                    <h4 class="mb-4 text-info fw-bold">🔬 Deep Analysis Results</h4>
+                    <div class="row align-items-center">
+                        <div class="col-md-5 text-center mb-3">
+                            <h6 id="resVerdict" class="display-6 fw-bold mb-3">--</h6>
+                            <h5 class="text-white-50">Calibrated Probability</h5>
+                            <h3 id="resScore">0%</h3>
+                            <h5 class="text-white-50 mt-3">Suspicious Artifacts Found</h5>
+                            <h4 id="resRegions">0</h4>
+                        </div>
+                        <div class="col-md-7 text-center">
+                            <h6 class="mb-3 text-info">Visual Bounding Matrix / Heatmap</h6>
+                            <img id="resImage" src="" style="max-height: 280px; border-radius:8px;" class="shadow w-100 object-fit-contain">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Script for Drag & Drop and File API execution handling -->
+    <script>
+        const dragArea = document.getElementById('dragArea');
+        const fileInput = document.getElementById('fileInput');
+        const browseBtn = document.getElementById('browseBtn');
+        const infoPanel = document.getElementById('fileInfoPanel');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        
+        browseBtn.onclick = () => fileInput.click();
+        dragArea.onclick = (e) => {
+            if(e.target !== browseBtn) fileInput.click();
+        };
+
+        fileInput.addEventListener('change', function() {
+            let file = this.files[0];
+            showFileInfo(file);
+        });
+
+        dragArea.addEventListener('dragover', (event) => {
+            event.preventDefault();
+            dragArea.classList.add('active');
+        });
+        dragArea.addEventListener('dragleave', () => dragArea.classList.remove('active'));
+        dragArea.addEventListener('drop', (event) => {
+            event.preventDefault();
+            dragArea.classList.remove('active');
+            let file = event.dataTransfer.files[0];
+            if (file) {
+                let dataTransfer = new DataTransfer();
+                dataTransfer.items.add(file);
+                fileInput.files = dataTransfer.files;
+                showFileInfo(file);
+            }
+        });
+
+        function showFileInfo(file) {
+            if (!file) return;
+            document.getElementById('infoName').textContent = file.name;
+            document.getElementById('infoFormat').textContent = file.type || "Unknown Ext";
+            document.getElementById('infoDate').textContent = new Date().toLocaleString();
+            const sizeKB = (file.size / 1024).toFixed(2);
+            document.getElementById('infoSize').textContent = `${sizeKB} KB`;
+            
+            infoPanel.style.display = 'block';
+            document.getElementById('resultsWrapper').style.display = 'none';
+        }
+
+        analyzeBtn.addEventListener('click', () => {
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('scanStatus').style.display = 'block';
+            infoPanel.style.display = 'none';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/detect', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('scanStatus').style.display = 'none';
+                infoPanel.style.display = 'block'; 
+
+                if (data.error) {
+                    alert("System Error: " + data.error);
+                } else {
+                    const resultsWrapper = document.getElementById('resultsWrapper');
+                    
+                    const score = data.confidence * 100 || data.similarity * 100 || 0;
+                    document.getElementById('resScore').textContent = score.toFixed(1) + '%';
+                    
+                    let verdictObj = document.getElementById('resVerdict');
+                    verdictObj.textContent = data.status;
+                    if(data.status === 'AUTHENTIC') {
+                        verdictObj.className = "display-6 fw-bold text-success";
+                    } else if (data.status === 'FORGED') {
+                        verdictObj.className = "display-6 fw-bold text-danger";
+                    } else {
+                        verdictObj.className = "display-6 fw-bold text-warning";
+                    }
+                    
+                    let regionCount = 0;
+                    if(data.forgery_results && data.forgery_results.regions) {
+                        regionCount = data.forgery_results.regions.length;
+                    }
+                    document.getElementById('resRegions').textContent = regionCount;
+
+                    let targetImg = document.getElementById('resImage');
+                    if (data.forgery_results && data.forgery_results.annotated_b64) {
+                        targetImg.src = "data:image/png;base64," + data.forgery_results.annotated_b64;
+                    } else if (data.forgery_results && data.forgery_results.heatmap_b64) {
+                        targetImg.src = "data:image/png;base64," + data.forgery_results.heatmap_b64;
+                    } else if (data.similarity_heatmap) {
+                        targetImg.src = "data:image/png;base64," + data.similarity_heatmap;
+                    } else {
+                        targetImg.removeAttribute('src'); 
+                    }
+
+                    resultsWrapper.style.display = 'flex';
+                    // Scroll to results cleanly
+                    resultsWrapper.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            })
+            .catch(err => {
+                alert("Network communication failed.");
+                document.getElementById('scanStatus').style.display = 'none';
+                infoPanel.style.display = 'block';
+            });
+        });
+    </script>
+</body>
+</html>

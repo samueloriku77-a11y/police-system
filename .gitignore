@@ -1,0 +1,27 @@
+.env
+.env.*
+node_modules/
+# dist/  <-- Commented out to allow pushing compiled frontend to GitHub
+dist/
+!sokoyetu/frontend/dist/
+__pycache__/
+*.pyc
+*.pyo
+venv/
+env/
+.venv/
+.DS_Store
+Thumbs.db
+*.sqlite3
+*.db
+dvs/
+flask_session/
+instance/
+uploads/
+reports/
+originals/
+models/
+*.h5
+*.pkl
+*.pb
+*.weights

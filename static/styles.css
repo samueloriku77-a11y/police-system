@@ -1,0 +1,272 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+:root {
+    --primary-color: #00c6ff;
+    --primary-hover: #0072ff;
+    --bg-gradient: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #121e25);
+    --glass-bg: rgba(255, 255, 255, 0.08);
+    --glass-border: rgba(255, 255, 255, 0.15);
+    --text-main: #ffffff;
+    --text-muted: #b0bec5;
+}
+
+body {
+    background: var(--bg-gradient);
+    background-size: 400% 400%;
+    animation: gradientBG 15s ease infinite;
+    font-family: 'Outfit', sans-serif !important;
+    color: var(--text-main) !important;
+    min-height: 100vh;
+    margin: 0;
+}
+
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+.container, .login-container, .register-container {
+    max-width: 800px;
+    margin: 60px auto;
+    z-index: 10;
+}
+.login-container, .register-container {
+    max-width: 450px;
+    margin: 100px auto;
+}
+
+/* Glassmorphism Card */
+.card {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(15px) !important;
+    -webkit-backdrop-filter: blur(15px) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 16px !important;
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4) !important;
+    color: var(--text-main) !important;
+    padding: 2rem;
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5 {
+    font-weight: 700;
+    color: #fff !important;
+    letter-spacing: 0.5px;
+}
+p {
+    color: var(--text-muted);
+}
+
+/* Inputs */
+.form-control, .form-select {
+    background: rgba(0, 0, 0, 0.3) !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+    color: #fff !important;
+    border-radius: 8px !important;
+    padding: 12px 15px !important;
+    transition: all 0.3s ease !important;
+}
+
+.form-control:focus, .form-select:focus {
+    background: rgba(0, 0, 0, 0.5) !important;
+    border-color: var(--primary-color) !important;
+    box-shadow: 0 0 10px rgba(0, 198, 255, 0.5) !important;
+    color: #fff !important;
+}
+
+.form-control::placeholder {
+    color: var(--text-muted) !important;
+}
+
+/* Buttons */
+.btn-primary, .btn-login, .btn-register, .btn-success {
+    background: linear-gradient(45deg, var(--primary-hover), var(--primary-color)) !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 12px 25px !important;
+    font-size: 16px !important;
+    font-weight: bold;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: all 0.3s ease !important;
+    box-shadow: 0 4px 15px rgba(0, 198, 255, 0.3) !important;
+    color: #fff !important;
+}
+
+.btn-primary:hover, .btn-login:hover, .btn-register:hover, .btn-success:hover {
+    background: linear-gradient(45deg, var(--primary-color), var(--primary-hover)) !important;
+    transform: scale(1.05) !important;
+    box-shadow: 0 6px 20px rgba(0, 198, 255, 0.6) !important;
+}
+
+/* Navbar */
+.navbar {
+    background: rgba(0, 0, 0, 0.4) !important;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--glass-border);
+}
+.navbar-brand, .nav-link {
+    color: #fff !important;
+    font-weight: 600;
+}
+.nav-link:hover {
+    color: var(--primary-color) !important;
+}
+
+/* Labels and Texts */
+.form-label, .form-check-label {
+    color: #fff;
+    font-weight: 600;
+}
+a {
+    color: var(--primary-color);
+    text-decoration: none;
+    transition: color 0.3s ease;
+}
+a:hover {
+    color: #fff;
+    text-decoration: underline;
+}
+
+/* Specific elements from old CSS */
+#result {
+    background: rgba(0,0,0,0.3) !important;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    margin-top: 20px;
+}
+
+#status {
+    font-weight: bold;
+    font-size: 1.2rem;
+}
+
+.authentic {
+    color: #00e676 !important;
+    text-shadow: 0 0 10px rgba(0, 230, 118, 0.4);
+}
+
+.forged {
+    color: #ff1744 !important;
+    text-shadow: 0 0 10px rgba(255, 23, 68, 0.4);
+}
+
+#imagePreview img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    border: 2px solid var(--glass-border);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    transition: transform 0.3s ease;
+}
+#imagePreview img:hover {
+    transform: scale(1.02);
+}
+
+/* Table styles for Admin/History */
+.table {
+    color: #fff !important;
+}
+table th {
+    background: rgba(255,255,255,0.1) !important;
+    color: #fff !important;
+}
+table td {
+    background: rgba(0,0,0,0.2) !important;
+    color: #f8f9fa !important;
+    border-bottom: 1px solid rgba(255,255,255,0.05) !important;
+}
+
+/* Flashed messages alert */
+.alert {
+    background: rgba(255,255,255,0.1) !important;
+    border: 1px solid var(--glass-border) !important;
+    color: #fff !important;
+    backdrop-filter: blur(10px);
+}
+
+/* Admin Upload Area Fixes - Font Collision Fix */
+.upload-area {
+  min-height: 150px;
+  border: 2px dashed var(--glass-border) !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.95) !important;
+  color: #333 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 40px 20px !important;
+  transition: all 0.3s ease !important;
+  cursor: pointer !important;
+  font-weight: 400 !important;
+  font-size: 1.1rem !important;
+  z-index: 20 !important;
+  position: relative !important;
+  text-align: center !important;
+}
+
+.upload-area:hover {
+  background: rgba(255, 255, 255, 1) !important;
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 4px 20px rgba(0, 198, 255, 0.3) !important;
+}
+
+.upload-area.dragover {
+  background: rgba(0, 198, 255, 0.15) !important;
+  border-color: var(--primary-color) !important;
+  border-style: solid !important;
+  transform: scale(1.02) !important;
+}
+
+.upload-area p {
+  font-weight: 500 !important;
+  margin-bottom: 8px !important;
+  color: #555 !important;
+}
+
+.upload-area strong {
+  font-weight: 600 !important;
+  color: #222 !important;
+  font-size: 1.2rem !important;
+}
+
+.upload-area small {
+  color: #666 !important;
+}
+
+#uploadStatus {
+  margin-top: 15px !important;
+  z-index: 25 !important;
+}
+
+#uploadStatus .alert {
+  margin-top: 15px !important;
+  font-weight: 500 !important;
+  border-radius: 8px !important;
+}
+
+.reference-item {
+  display: flex !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+  padding: 12px !important;
+  background: rgba(0,0,0,0.3) !important;
+  border-radius: 8px !important;
+  margin-bottom: 10px !important;
+  font-size: 0.95rem !important;
+  border: 1px solid var(--glass-border) !important;
+}
+
+.reference-item strong {
+  color: var(--text-main) !important;
+  font-weight: 600 !important;
+}

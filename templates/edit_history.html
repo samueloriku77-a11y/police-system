@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Edit History</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .breadcrumb {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .back-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+            margin-right: 20px;
+        }
+
+        .back-link:hover {
+            text-decoration: underline;
+        }
+
+        .content {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        thead {
+            background: #f5f5f5;
+        }
+
+        th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            color: #333;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #e0e0e0;
+            color: #666;
+        }
+
+        tbody tr:hover {
+            background: #f9f9f9;
+        }
+
+        .filename {
+            color: #667eea;
+            font-weight: 500;
+            word-break: break-word;
+        }
+
+        .uploader {
+            font-weight: 500;
+            color: #333;
+        }
+
+        .similarity-score {
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 4px;
+            text-align: center;
+            display: inline-block;
+            min-width: 60px;
+        }
+
+        .similarity-high {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .similarity-medium {
+            background: #cce5ff;
+            color: #004085;
+        }
+
+        .similarity-low {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .changed-regions {
+            font-weight: 600;
+            color: #d32f2f;
+        }
+
+        .change-percent {
+            font-weight: 500;
+        }
+
+        .timestamp {
+            color: #999;
+            font-size: 12px;
+        }
+
+        .action-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .action-button:hover {
+            background: #5568d3;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 6px;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Modal */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            max-width: 800px;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 10px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .close-button:hover {
+            color: #333;
+        }
+
+        .modal-detail {
+            margin-bottom: 15px;
+        }
+
+        .modal-detail-label {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .modal-detail-value {
+            color: #666;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 4px;
+        }
+
+        .heatmap-container {
+            margin-top: 20px;
+        }
+
+        .heatmap-container img {
+            max-width: 100%;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        @media (max-width: 768px) {
+            .content {
+                padding: 15px;
+            }
+
+            th, td {
+                padding: 10px;
+                font-size: 12px;
+            }
+
+            table {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>⚠️ Document Edit History</h1>
+                    <div class="breadcrumb">Track all detected document edits in your organization</div>
+                </div>
+                <a class="back-link" href="/admin">← Back to Admin</a>
+            </div>
+        </header>
+
+        <!-- Content -->
+        <div class="content">
+            <div id="alertBox"></div>
+
+            <div id="tableContainer">
+                <div class="loader" style="display: block;">
+                    <div class="spinner"></div>
+                    <p>Loading edit history...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Modal -->
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <span>Edit Details</span>
+                <button class="close-button" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody"></div>
+        </div>
+    </div>
+
+    <script>
+        // Load edit history on page load
+        document.addEventListener('DOMContentLoaded', loadEditHistory);
+
+        // Close modal when clicking outside
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        async function loadEditHistory() {
+            const container = document.getElementById('tableContainer');
+
+            try {
+                const response = await fetch('/api/edit-history');
+                const data = await response.json();
+
+                if (data.success) {
+                    if (data.edits.length === 0) {
+                        container.innerHTML = `
+                            <div class="empty-state">
+                                <div class="empty-state-icon">✅</div>
+                                <p>No document edits detected</p>
+                                <p style="font-size: 12px; margin-top: 10px;">All monitored documents remain authentic</p>
+                            </div>
+                        `;
+                    } else {
+                        container.innerHTML = `
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Original Document</th>
+                                        <th>Edited Version</th>
+                                        <th>Uploaded By</th>
+                                        <th>Similarity</th>
+                                        <th>Changed Regions</th>
+                                        <th>Changed %</th>
+                                        <th>Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${data.edits.map(edit => {
+                                        const similarity = parseFloat(edit.similarity_score);
+                                        let simClass = 'similarity-low';
+                                        if (similarity > 0.9) simClass = 'similarity-high';
+                                        else if (similarity > 0.8) simClass = 'similarity-medium';
+
+                                        return `
+                                            <tr>
+                                                <td><span class="filename">${escapeHtml(edit.original_filename)}</span></td>
+                                                <td><span class="filename">${escapeHtml(edit.uploaded_filename)}</span></td>
+                                                <td><span class="uploader">${escapeHtml(edit.uploader_office)}</span></td>
+                                                <td><span class="similarity-score ${simClass}">${(similarity * 100).toFixed(1)}%</span></td>
+                                                <td><span class="changed-regions">${edit.changed_regions_count}</span></td>
+                                                <td><span class="change-percent">${(edit.changed_regions_percentage || 0).toFixed(2)}%</span></td>
+                                                <td>
+                                                    <span class="timestamp">${new Date(edit.timestamp).toLocaleDateString()}</span>
+                                                </td>
+                                                <td>
+                                                    <button class="action-button" onclick="viewDetails(${edit.id})">View</button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                    }
+                } else {
+                    container.innerHTML = '<div class="alert alert-error">Failed to load edit history</div>';
+                }
+            } catch (error) {
+                container.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+            }
+        }
+
+        async function viewDetails(editLogId) {
+            const modal = document.getElementById('detailModal');
+            const body = document.getElementById('modalBody');
+
+            body.innerHTML = '<div class="loader"><div class="spinner"></div><p>Loading details...</p></div>';
+            modal.style.display = 'block';
+
+            try {
+                const response = await fetch(`/admin/edit-details/${editLogId}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    const log = data.edit_log;
+                    const uploader = data.uploader;
+                    const heatmap = data.heatmap_b64;
+
+                    body.innerHTML = `
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Original Document</div>
+                            <div class="modal-detail-value">${escapeHtml(log.original_filename)}</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Edited Version</div>
+                            <div class="modal-detail-value">${escapeHtml(log.uploaded_filename)}</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Uploaded By</div>
+                            <div class="modal-detail-value">
+                                <strong>${escapeHtml(uploader.username)}</strong><br>
+                                Email: ${escapeHtml(uploader.email)}<br>
+                                Office: ${escapeHtml(log.uploader_office)}
+                            </div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Similarity Score</div>
+                            <div class="modal-detail-value">${(log.similarity_score * 100).toFixed(2)}%</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Changed Regions</div>
+                            <div class="modal-detail-value">${log.changed_regions_count} region(s)</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Percentage Changed</div>
+                            <div class="modal-detail-value">${log.changed_regions_percentage.toFixed(2)}%</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Detection Date</div>
+                            <div class="modal-detail-value">${new Date(log.timestamp).toLocaleString()}</div>
+                        </div>
+
+                        <div class="modal-detail">
+                            <div class="modal-detail-label">Admin Notified</div>
+                            <div class="modal-detail-value">${log.email_sent_to_admin ? '✓ Yes' : '✗ No'}</div>
+                        </div>
+
+                        ${heatmap ? `
+                            <div class="heatmap-container">
+                                <div class="modal-detail-label">Changed Regions Heatmap (Red indicates changes)</div>
+                                <img src="data:image/png;base64,${heatmap}" alt="Heatmap">
+                            </div>
+                        ` : ''}
+                    `;
+                } else {
+                    body.innerHTML = `<div class="alert alert-error">${data.error || 'Failed to load details'}</div>`;
+                }
+            } catch (error) {
+                body.innerHTML = `<div class="alert alert-error">Error: ${error.message}</div>`;
+            }
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').style.display = 'none';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
