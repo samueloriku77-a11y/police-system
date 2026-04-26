@@ -1,12 +1,32 @@
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, session, make_response
 
 from flask_session import Session
-import cv2
+# import cv2  <-- Mocked for demo
 import numpy as np
 import json
 import pickle
 import os
 from werkzeug.utils import secure_filename
+
+# DUMMY CV2 MOCK FOR UI DEMO
+class MockCv2:
+    IMREAD_UNCHANGED = 0
+    COLOR_BGR2GRAY = 6
+    RETR_EXTERNAL = 0
+    CHAIN_APPROX_SIMPLE = 1
+    def imread(self, *args, **kwargs): return np.zeros((100,100,3))
+    def resize(self, img, size, **kwargs): return img
+    def cvtColor(self, img, code): return img
+    def imencode(self, ext, img, **kwargs): return True, b''
+    def waitKey(self, *args): return 0
+    def destroyAllWindows(self): pass
+    def findContours(self, *args): return [], None
+    def boundingRect(self, *args): return 0,0,10,10
+    def rectangle(self, *args): pass
+    def putText(self, *args): pass
+
+cv2 = MockCv2()
+
 import hashlib
 import datetime
 from dotenv import load_dotenv
