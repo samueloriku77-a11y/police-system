@@ -368,6 +368,10 @@ def detect_document_edits(uploaded_filepath, organization_name, uploader_user):
         return result
 
 @app.route('/')
+def landing():
+    return render_template('landing.html')
+
+@app.route('/dashboard')
 def index():
     if 'user_id' not in session:
         return redirect(url_for('login'))
@@ -393,6 +397,7 @@ def login():
             db.session.add(log)
             db.session.commit()
             return redirect(url_for('index'))
+
         else:
             flash('Invalid email or password', 'danger')
     
