@@ -185,3 +185,148 @@ class DocumentEditLog(db.Model):
             'email_sent_to_admin': self.email_sent_to_admin,
             'timestamp': self.timestamp.isoformat()
         }
+
+
+# ============================================================================
+# CONTEXT-AWARE DOCUMENT POLICE SYSTEM MODELS
+# ============================================================================
+
+class DocumentType(db.Model):
+    """Defines document types with their configurations"""
+    __tablename__ = 'document_types'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), unique=True, nullable=False, index=True)  # Invoice, Contract, ID_Card, Check
+    description = db.Column(db.Text, nullable=True)
+    config_json = db.Column(db.JSON, nullable=True)  # Stores thresholds and settings
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    reference_templates = db.relationship('ReferenceTemplate', backref='doc_type', lazy=True, cascade='all, delete-orphan')
+    protected_zones = db.relationship('ProtectedZone', backref='doc_type', lazy=True, cascade='all, delete-orphan')
+    forensic_reports = db.relationship('ForensicReport', backref='doc_type', lazy=True, cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'description': self.description,
+            'config': self.config_json,
+            'created_at': self.created_at.isoformat()
+        }
+
+
+class ReferenceTemplate(db.Model):
+    """Master reference templates for each document type"""
+    __tablename__ = 'reference_templates'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    document_type_id = db.Column(db.Integer, db.ForeignKey('document_types.id'), nullable=False, index=True)
+    template_name = db.Column(db.String(100), nullable=False)
+    file_path = db.Column(db.String(255), nullable=False)
+    feature_embedding = db.Column(db.LargeBinary, nullable=True)  # Stored features
+    version = db.Column(db.String(20), default="1.0")
+    created_by_id = db.Column(db.Integer, db.ForeignKey('police_users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'document_type_id': self.document_type_id,
+            'template_name': self.template_name,
+            'version': self.version,
+            'created_at': self.created_at.isoformat()
+        }
+
+
+class ProtectedZone(db.Model):
+    """Protected zones within documents (e.g., signature area, bank details)"""
+    __tablename__ = 'protected_zones'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    document_type_id = db.Column(db.Integer, db.ForeignKey('document_types.id'), nullable=False, index=True)
+    zone_name = db.Column(db.String(100), nullable=False)
+    coordinates = db.Column(db.JSON, nullable=False)  # {"x1": 50, "y1": 300, "x2": 550, "y2": 450}
+    similarity_threshold = db.Column(db.Float, default=0.95)  # 0.99 for critical, 0.95 for normal
+    priority = db.Column(db.String(20), default="high")  # critical, high, medium, low
+    description = db.Column(db.Text, nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'document_type_id': self.document_type_id,
+            'zone_name': self.zone_name,
+            'coordinates': self.coordinates,
+            'similarity_threshold': self.similarity_threshold,
+            'priority': self.priority,
+            'description': self.description
+        }
+
+
+class ForensicReport(db.Model):
+    """Stores forensic analysis results from DocumentPoliceEvaluator"""
+    __tablename__ = 'forensic_reports'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('police_users.id'), nullable=False, index=True)
+    document_type_id = db.Column(db.Integer, db.ForeignKey('document_types.id'), nullable=False, index=True)
+    received_doc_path = db.Column(db.String(255), nullable=False)
+    overall_similarity = db.Column(db.Float, nullable=False)  # 0-1 Siamese network similarity
+    ela_score = db.Column(db.Float, nullable=False)  # Error Level Analysis score
+    structural_alignment_score = db.Column(db.Float, nullable=False)  # Text block alignment
+    siamese_confidence = db.Column(db.Float, nullable=False)  # Deep learning confidence
+    zone_violations_count = db.Column(db.Integer, default=0)
+    anomaly_regions_json = db.Column(db.JSON, nullable=True)  # ELA anomalies
+    heatmap_data = db.Column(db.Text(length=16777215), nullable=True)  # Base64 encoded PNG
+    zone_heatmap_data = db.Column(db.Text(length=16777215), nullable=True)  # Zone violations heatmap
+    ela_heatmap_data = db.Column(db.Text(length=16777215), nullable=True)  # ELA heatmap
+    report_text = db.Column(db.Text(length=16777215), nullable=True)  # Full forensic report
+    alert_severity = db.Column(db.String(20), default="CLEAN")  # CRITICAL, HIGH, MEDIUM, LOW, CLEAN
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationship
+    fraud_alert = db.relationship('FraudAlert', backref='forensic_report', uselist=False, cascade='all, delete-orphan')
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'user_id': self.user_id,
+            'document_type_id': self.document_type_id,
+            'overall_similarity': self.overall_similarity,
+            'ela_score': self.ela_score,
+            'structural_alignment_score': self.structural_alignment_score,
+            'zone_violations_count': self.zone_violations_count,
+            'alert_severity': self.alert_severity,
+            'created_at': self.created_at.isoformat()
+        }
+
+
+class FraudAlert(db.Model):
+    """Fraud alerts triggered by forensic analysis"""
+    __tablename__ = 'fraud_alerts'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    forensic_report_id = db.Column(db.Integer, db.ForeignKey('forensic_reports.id'), nullable=False, unique=True, index=True)
+    alert_type = db.Column(db.String(50), nullable=False)  # zone_violation, ela_anomaly, structural_change
+    severity_level = db.Column(db.String(20), nullable=False)  # CRITICAL, HIGH, MEDIUM, LOW
+    violated_zones_json = db.Column(db.JSON, nullable=True)  # List of violated zones
+    description = db.Column(db.Text, nullable=False)
+    is_acknowledged = db.Column(db.Boolean, default=False)
+    acknowledged_by_id = db.Column(db.Integer, db.ForeignKey('police_users.id'), nullable=True)
+    acknowledged_at = db.Column(db.DateTime, nullable=True)
+    notes = db.Column(db.Text, nullable=True)  # Admin notes
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'forensic_report_id': self.forensic_report_id,
+            'alert_type': self.alert_type,
+            'severity_level': self.severity_level,
+            'is_acknowledged': self.is_acknowledged,
+            'created_at': self.created_at.isoformat(),
+            'acknowledged_at': self.acknowledged_at.isoformat() if self.acknowledged_at else None
+        }

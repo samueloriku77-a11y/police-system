@@ -30,12 +30,18 @@ cv2 = MockCv2()
 import hashlib
 import datetime
 from dotenv import load_dotenv
-from db import db, User, VerificationResult, AuditLog, ReferenceDocument, DocumentTrackerLog, OrganizationReferenceDocument, DocumentEditLog
+from db import (
+    db, User, VerificationResult, AuditLog, ReferenceDocument, DocumentTrackerLog,
+    OrganizationReferenceDocument, DocumentEditLog,
+    DocumentType, ReferenceTemplate, ProtectedZone, ForensicReport, FraudAlert
+)
 from preprocessing import ImagePreprocessor
 from feature_extraction import FeatureExtractor, ForgeryDetector
 from similarity import SimilarityCalculator
 from email_service import email_service
 from advanced_forgery_detector import AdvancedForgeryDetector
+from document_police_evaluator import DocumentPoliceEvaluator
+from zero_trust_engine import DirectoryWatcher, ForgeryAnalyzer
 import base64
 import io
 from urllib.parse import quote
@@ -98,6 +104,7 @@ preprocessor = ImagePreprocessor()
 feature_extractor = FeatureExtractor(model_path=MODEL_PATH, metadata_path=MODEL_METADATA_PATH)
 similarity_calculator = SimilarityCalculator()
 advanced_detector = AdvancedForgeryDetector()  # Multi-stage detector (alignment + embedding + pixel analysis)
+document_police_evaluator = DocumentPoliceEvaluator()  # Context-Aware Document Police
 
 from tracker import tracker_bp
 app.register_blueprint(tracker_bp)
@@ -1548,6 +1555,463 @@ def edit_details(edit_log_id):
         'heatmap_b64': edit_log.diff_heatmap_b64
     })
 
+
+# ============================================================================
+# CONTEXT-AWARE DOCUMENT POLICE ROUTES
+# ============================================================================
+
+@app.route('/api/document-types', methods=['GET'])
+def get_document_types():
+    """Get all available document types"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    doc_types = DocumentType.query.all()
+    return jsonify({
+        'success': True,
+        'document_types': [dt.to_dict() for dt in doc_types]
+    })
+
+
+@app.route('/admin/create-document-type', methods=['POST'])
+def create_document_type():
+    """Admin: Create new document type with protected zones (admin only)"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    data = request.get_json()
+    name = data.get('name')
+    description = data.get('description', '')
+    config = data.get('config', {})
+    
+    if not name:
+        return jsonify({'error': 'Document type name required'}), 400
+    
+    if DocumentType.query.filter_by(name=name).first():
+        return jsonify({'error': 'Document type already exists'}), 409
+    
+    doc_type = DocumentType(
+        name=name,
+        description=description,
+        config_json=config
+    )
+    db.session.add(doc_type)
+    db.session.commit()
+    
+    # Audit log
+    log = AuditLog(
+        user_id=user.id,
+        action='CREATE_DOCUMENT_TYPE',
+        details=f'Created document type: {name}'
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'document_type': doc_type.to_dict()
+    }), 201
+
+
+@app.route('/admin/upload-reference-template', methods=['POST'])
+def upload_reference_template():
+    """Admin: Upload master reference template for document type"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    document_type_id = request.form.get('document_type_id')
+    template_name = request.form.get('template_name', file.filename)
+    
+    if not document_type_id:
+        return jsonify({'error': 'Document type ID required'}), 400
+    
+    doc_type = db.session.get(DocumentType, document_type_id)
+    if not doc_type:
+        return jsonify({'error': 'Document type not found'}), 404
+    
+    try:
+        # Save template file
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"template_{doc_type.name}_{filename}")
+        file.save(filepath)
+        
+        # Create reference template record
+        template = ReferenceTemplate(
+            document_type_id=doc_type.id,
+            template_name=template_name,
+            file_path=filepath,
+            created_by_id=user.id
+        )
+        db.session.add(template)
+        db.session.commit()
+        
+        # Audit log
+        log = AuditLog(
+            user_id=user.id,
+            action='UPLOAD_TEMPLATE',
+            details=f'Uploaded reference template for {doc_type.name}'
+        )
+        db.session.add(log)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'template': template.to_dict()
+        }), 201
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/admin/configure-protected-zones/<doc_type_id>', methods=['POST'])
+def configure_protected_zones(doc_type_id):
+    """Admin: Configure protected zones for document type"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    doc_type = db.session.get(DocumentType, doc_type_id)
+    if not doc_type:
+        return jsonify({'error': 'Document type not found'}), 404
+    
+    zones_data = request.get_json()
+    
+    # Clear existing zones
+    ProtectedZone.query.filter_by(document_type_id=doc_type.id).delete()
+    
+    # Add new zones
+    for zone_config in zones_data.get('zones', []):
+        zone = ProtectedZone(
+            document_type_id=doc_type.id,
+            zone_name=zone_config.get('zone_name'),
+            coordinates=zone_config.get('coordinates'),  # {x1, y1, x2, y2}
+            similarity_threshold=zone_config.get('similarity_threshold', 0.95),
+            priority=zone_config.get('priority', 'high'),
+            description=zone_config.get('description', '')
+        )
+        db.session.add(zone)
+    
+    db.session.commit()
+    
+    # Audit log
+    log = AuditLog(
+        user_id=user.id,
+        action='CONFIGURE_ZONES',
+        details=f'Configured protected zones for {doc_type.name}'
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': f'Configured {len(zones_data.get("zones", []))} protected zones'
+    })
+
+
+@app.route('/api/evaluate-document', methods=['POST'])
+def evaluate_document():
+    """Main forensic analysis endpoint: Uploads document and performs context-aware analysis"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if 'document' not in request.files:
+        return jsonify({'error': 'No document provided'}), 400
+    
+    file = request.files['document']
+    document_type = request.form.get('document_type')
+    
+    if not document_type:
+        return jsonify({'error': 'Document type required'}), 400
+    
+    try:
+        # Verify document type exists
+        doc_type_obj = DocumentType.query.filter_by(name=document_type).first()
+        if not doc_type_obj:
+            return jsonify({'error': f'Unknown document type: {document_type}'}), 400
+        
+        # Save uploaded document
+        filename = secure_filename(file.filename)
+        filepath = os.path.join(app.config['UPLOAD_FOLDER'], f"eval_{filename}")
+        file.save(filepath)
+        
+        # Get reference template
+        template = ReferenceTemplate.query.filter_by(document_type_id=doc_type_obj.id).first()
+        if not template:
+            return jsonify({'error': f'No reference template for {document_type}'}), 404
+        
+        # Run forensic evaluation
+        forensic_result = document_police_evaluator.evaluate_document(
+            document_path=filepath,
+            document_type=document_type,
+            reference_template_path=template.file_path
+        )
+        
+        # Save forensic report to database
+        forensic_report = ForensicReport(
+            user_id=session.get('user_id'),
+            document_type_id=doc_type_obj.id,
+            received_doc_path=filepath,
+            overall_similarity=forensic_result.overall_similarity,
+            ela_score=forensic_result.ela_score,
+            structural_alignment_score=forensic_result.structural_alignment_score,
+            siamese_confidence=forensic_result.siamese_confidence,
+            zone_violations_count=len(forensic_result.zone_violations),
+            anomaly_regions_json=forensic_result.anomaly_regions,
+            heatmap_data=forensic_result.heatmap_b64,
+            zone_heatmap_data=forensic_result.zone_violations_b64,
+            ela_heatmap_data=forensic_result.ela_heatmap_b64,
+            report_text=forensic_result.forensic_report,
+            alert_severity=forensic_result.alert_severity.value
+        )
+        db.session.add(forensic_report)
+        db.session.commit()
+        
+        # Create fraud alert if violations exist
+        if forensic_result.zone_violations:
+            alert = FraudAlert(
+                forensic_report_id=forensic_report.id,
+                alert_type='zone_violation',
+                severity_level=forensic_result.alert_severity.value,
+                violated_zones_json=forensic_result.zone_violations,
+                description=f'{len(forensic_result.zone_violations)} protected zones violated'
+            )
+            db.session.add(alert)
+            db.session.commit()
+        
+        # Audit log
+        audit_log = AuditLog(
+            user_id=session.get('user_id'),
+            action='FORENSIC_ANALYSIS',
+            details=f'Analyzed {document_type}: {forensic_result.alert_severity}'
+        )
+        db.session.add(audit_log)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'forensic_report': {
+                'report_id': forensic_report.id,
+                'document_type': forensic_result.document_type,
+                'overall_similarity': forensic_result.overall_similarity,
+                'ela_score': forensic_result.ela_score,
+                'structural_alignment': forensic_result.structural_alignment_score,
+                'siamese_confidence': forensic_result.siamese_confidence,
+                'zone_violations': forensic_result.zone_violations,
+                'zone_violations_count': len(forensic_result.zone_violations),
+                'alert_severity': forensic_result.alert_severity.value,
+                'heatmap': forensic_result.heatmap_b64,
+                'report': forensic_result.forensic_report
+            }
+        })
+    
+    except Exception as e:
+        print(f"Evaluation error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/forensic-report/<int:report_id>', methods=['GET'])
+def get_forensic_report(report_id):
+    """Retrieve detailed forensic report"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    report = db.session.get(ForensicReport, report_id)
+    if not report:
+        return jsonify({'error': 'Report not found'}), 404
+    
+    return jsonify({
+        'success': True,
+        'report': report.to_dict(),
+        'heatmap': report.heatmap_data,
+        'report_text': report.report_text,
+        'fraud_alert': report.fraud_alert.to_dict() if report.fraud_alert else None
+    })
+
+
+@app.route('/api/alerts', methods=['GET'])
+def get_alerts():
+    """Get all fraud alerts (admin only)"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    alerts = FraudAlert.query.order_by(FraudAlert.created_at.desc()).limit(100).all()
+    return jsonify({
+        'success': True,
+        'alerts': [alert.to_dict() for alert in alerts]
+    })
+
+
+@app.route('/api/alerts/<int:alert_id>/acknowledge', methods=['POST'])
+def acknowledge_alert(alert_id):
+    """Mark alert as acknowledged"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    alert = db.session.get(FraudAlert, alert_id)
+    if not alert:
+        return jsonify({'error': 'Alert not found'}), 404
+    
+    alert.is_acknowledged = True
+    alert.acknowledged_by_id = user.id
+    alert.acknowledged_at = datetime.datetime.utcnow()
+    alert.notes = request.get_json().get('notes', '')
+    
+    db.session.commit()
+    
+    # Audit log
+    log = AuditLog(
+        user_id=user.id,
+        action='ACKNOWLEDGE_ALERT',
+        details=f'Acknowledged fraud alert {alert_id}'
+    )
+    db.session.add(log)
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'alert': alert.to_dict()
+    })
+
+
+@app.route('/api/critical-alerts', methods=['GET'])
+def get_critical_alerts():
+    """Get only CRITICAL alerts (admin only)"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user = db.session.get(User, session.get('user_id'))
+    if not user or not user.is_admin:
+        return jsonify({'error': 'Admin privileges required'}), 403
+    
+    critical_alerts = FraudAlert.query.filter_by(
+        severity_level='CRITICAL',
+        is_acknowledged=False
+    ).order_by(FraudAlert.created_at.desc()).all()
+    
+    return jsonify({
+        'success': True,
+        'critical_alerts': [alert.to_dict() for alert in critical_alerts],
+        'count': len(critical_alerts)
+    })
+
+
+@app.route('/api/forensic-history', methods=['GET'])
+def get_forensic_history():
+    """Get current user's forensic analysis history"""
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    user_id = session.get('user_id')
+    reports = ForensicReport.query.filter_by(user_id=user_id).order_by(
+        ForensicReport.created_at.desc()
+    ).limit(50).all()
+    
+    return jsonify({
+        'success': True,
+        'reports': [report.to_dict() for report in reports]
+    })
+
+
+@app.route('/api/categories', methods=['GET'])
+def get_categories():
+    watcher = DirectoryWatcher()
+    categories = watcher.sync_to_db()
+    return jsonify({"categories": categories})
+
+@app.route('/api/zero-trust-upload', methods=['POST'])
+def zero_trust_upload():
+    if 'user_id' not in session:
+        return jsonify({'error': 'Unauthorized'}), 401
+        
+    if 'document' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+        
+    file = request.files['document']
+    category = request.form.get('category') # e.g., 'Contracts'
+    
+    if not category:
+        return jsonify({'error': 'Category required'}), 400
+    
+    # 1. Save Suspect
+    suspect_path = os.path.join(app.config['UPLOAD_FOLDER'], secure_filename(file.filename))
+    file.save(suspect_path)
+    
+    # 2. Get Master from folder
+    master_path = os.path.join("master_references", category, "master_template.pdf")
+    if not os.path.exists(master_path):
+        cat_dir = os.path.join("master_references", category)
+        if os.path.exists(cat_dir):
+            files = [f for f in os.listdir(cat_dir) if os.path.isfile(os.path.join(cat_dir, f))]
+            if files:
+                master_path = os.path.join(cat_dir, files[0])
+    
+    # 3. Analyze
+    analyzer = ForgeryAnalyzer()
+    alignment_score = analyzer.check_structural_alignment(suspect_path, master_path)
+    
+    if alignment_score < 0.98:
+        # Generate Heatmap and Log Fraud
+        heatmap_dict = generate_difference_heatmap(master_path, suspect_path)
+        heatmap_path = heatmap_dict.get('heatmap_b64', '')
+        
+        log_entry = DocumentEditLog(
+            organization_name="System",
+            original_filename="master_template",
+            uploaded_filename=file.filename,
+            uploader_id=session.get('user_id'),
+            uploader_office="System",
+            similarity_score=float(alignment_score),
+            diff_heatmap_b64=heatmap_path
+        )
+        db.session.add(log_entry)
+        db.session.commit()
+        
+        # Send Alert to Sudo
+        admin = User.query.filter_by(is_admin=True).first()
+        admin_email = admin.email if admin else "admin@example.com"
+        
+        user = db.session.get(User, session.get('user_id'))
+        office_name = user.username if user else "Unknown User"
+        timestamp = datetime.datetime.utcnow().isoformat()
+        
+        email_service.send_forgery_alert(
+            office_name=office_name,
+            filename=file.filename,
+            timestamp=timestamp,
+            similarity_score=float(alignment_score) * 100,
+            forged_regions=heatmap_dict.get('changed_regions', 0),
+            recipient_email=admin_email,
+            changed_regions_b64=heatmap_path
+        )
+        
+        return jsonify({"status": "REJECTED", "reason": "Structural Integrity Failed", "score": float(alignment_score)}), 403
+    
+    return jsonify({"status": "VERIFIED", "score": float(alignment_score)})
 
 if __name__ == '__main__':
     with app.app_context():

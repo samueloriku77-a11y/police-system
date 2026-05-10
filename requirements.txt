@@ -11,3 +11,8 @@ PyMySQL==1.1.0
 cryptography==41.0.7
 mysql-connector-python
 python-dotenv==1.0.0
+opencv-python==4.8.0.76
+tensorflow==2.13.0
+keras==2.13.0
+scikit-image==0.21.0
+scipy==1.10.0
